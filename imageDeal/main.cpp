@@ -1,238 +1,91 @@
-﻿#include <iostream>
-#include<stdio.h>
-#include<string>
+﻿#include<stdio.h>
 #include<opencv2/core/core.hpp>
 #include<opencv2/highgui/highgui.hpp>
 #include<opencv.hpp>
 #include"mainInclude.h"
+#include"ui.h"
+#include<chrono>
 #define CVUI_IMPLEMENTATION
 #include"cvui-2.7.0/cvui.h"
-using namespace std;
-using namespace cv;
-enum type { color, gray, bin };
-void mat2array(Mat img);
-Mat array2mat(uint8* arr, uint8 h, uint8 w);
-void matShow(Mat img, enum type imgType, string str);
-Mat merge(Mat imgBin);
-uint8 mt9v30x_image[120][188];
-int16 differ;
+using cv::Mat;
+/*
+依赖：
+	本项目开源在github：
+	使用opencv2 C++版完成图像显示
+	使用cvui库完成gui设置：https://github.com/Dovyski/cvui
+	项目仅读取bmp灰度文件，大小限制为188*120，文件需按字符串path的形式存储
+
+用户设置参数：
+	frame：GUI框架，可设置大小
+	number_image：从哪张图片开始处理
+	fps_autoplay：启用自动播放时每秒处理多少帧图像
+	path：图片文件存放格式
+*/
+Mat frame = Mat(300, 400, CV_8UC3);
+int number_image = 229;
+int fps_autoplay = 6;
+const char* path = "D:\\photo\\%d.bmp";
 int main()
 {
-	cvui::init("button");
-	carCtrl.flag_associate = 0;
-	Mat frame = Mat(300, 600, CV_8UC3);
-	int imgNum = 48;
+	//UI控制变量
+	char str[20];
+	bool autoplay = false;
+	int direction = 0;
+	auto CurrentTime = std::chrono::steady_clock::now();
+	//使用到的图片
+	Mat imgGray, imgGraySample, imgBin_otsu, imgSearch_otsu, imgBin_sauvola, imgSearch_sauvola, imgBin_sobel, imgSearch_sobel, imgHist;
+	//初始化
 	imgInfoInit();
-	int flag_out = 1;
-	imgInfo.flag_round_stage = 0;
-	while (waitKey(30) != 27)
+	cvui::init("UI_block");
+	subplot(2, 2);
+	//主程序循环
+	while (cv::waitKey(30))
 	{
-
-		char str[20];
-		sprintf_s(str, "D:\\photo\\%d.bmp", imgNum);
-		Mat imgGray1 = imread(str, IMREAD_GRAYSCALE);
-		//matShow(imgGray1, gray, "gray origin");
-		mat2array(imgGray1);
-
+		//读取灰度图片并存入数组
+		sprintf_s(str, path, number_image);
+		imgGray = cv::imread(str, cv::IMREAD_GRAYSCALE);
+		mat2array(imgGray);
+		//抽样60层
 		imageSample();
-#if 1
-		//直方图均衡化
-		int ROW = 120;
-		int COLUMN = 188;
-		int i, j;
-		int hist[256] = { 0 };
-		for (i = 0; i < ROW; i++)
-			for (j = 0; j < ROW; j++)
-			{
-				hist[imageGray[i][j]]++;
-			}
-		int trans[256];
-		int sum = 0;
-		for (i = 0; i < 256; i++)
-		{
-			sum += hist[i];
-			trans[i] = (256.0 - 1.0) / (ROW * COLUMN) * sum;
-		}
-		for (i = 0; i < ROW; i++)
-			for (j = 0; j < COLUMN; j++)
-			{
-				imageGray[i][j] = trans[imageGray[i][j]];
-			}
-#endif
-		Mat imgGray2 = array2mat(&imageGray[0][0], _ROW, _COLUMN);
-		matShow(imgGray2, gray, "gray sample");
-
-		imageBinary();
-		Mat imgBin = array2mat(&imageBin[0][0], _ROW, _COLUMN);
-		matShow(imgBin, bin, "bin");
-
+		imgGraySample = array2mat(&imageGray[0][0], 60, 188);
+		//OTSU二值化及搜线 
+		process(OTSU);
+		imgBin_otsu = array2mat(&imageBin[0][0], 60, 188);
 		imageDeal();
-		Mat	imgSearch = merge(imgBin);
-		matShow(imgSearch, color, "search");
-
-		moveWindow("button", 565, 0);
-		//moveWindow("gray origin", 0, 0);
-		moveWindow("gray sample", 0, 0);
-		moveWindow("bin", 565, 361);
-		moveWindow("search", 0, 361);
-
-		frame = cv::Scalar(49, 52, 49);
+		imgSearch_otsu = paintLine(imgBin_otsu);
+		//SOBEL算子及搜线
+		process(OTSU);
+		process(SOBEL);
+		imgBin_sobel = array2mat(&imageBin[0][0], 60, 188);
+		imageDeal();
+		imgSearch_sobel = paintLine(imgBin_sobel);
+		//获取灰度直方图
+		imgHist = getHistImg(imgGray, threshold_image);
+		//显示
+		plot(imgGraySample, "Origin", 0);
+		plot(imgHist, "Hist", 1);
+		plot(imgBin_otsu, "OTSU", 2, true);
+		plot(imgSearch_otsu, "Search result of OTSU", 3);
+		//plot(imgBin_sobel, "sobel", 4, true);
+		//plot(imgSearch_sobel, "search of sobel", 5);
 		//*****************************************************************************************************
-		cvui::printf(frame, 0, 150, 1, 0xff0000, "imgNum:%d",imgNum);
-		cvui::printf(frame, 0, 200, 1, 0xff0000, "differ: %d ", differ);
-		cvui::printf(frame, 0, 250, 1, 0xff0000, "bn:%d", imgInfo.black_num);
-		cvui::printf(frame, 400, 150, 1, 0xff0000, "flag: %d ", imgInfo.flag_round_stage);
-		if (cvui::button(frame, 50, 50, 100, 100, "previous"))
+		//UI控制部分
+		UI_refresh(frame, direction, autoplay);
+		if (autoplay)
+			if (std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - CurrentTime).count() > 1000 / fps_autoplay)
+				CurrentTime = std::chrono::steady_clock::now();
+			else
+				continue;
+		while (direction)
 		{
-			while (true)
-			{
-				flag_out = 1;
-				imgNum--;
-				sprintf_s(str, "D:\\photo\\%d.bmp", imgNum);
-				string name = str;
-				struct stat buffer;
-				if ((stat(name.c_str(), &buffer) == 0))
-					break;
-				if (imgNum < 0)
-					exit(0);
-			}
+			number_image += direction;
+			if (number_image > 1000) number_image = 1;
+			if (number_image < 0) number_image = 410;
+			sprintf_s(str, path, number_image);
+			struct stat buffer;
+			if ((stat(str, &buffer) == 0))
+				break;
 		}
-		if (cvui::button(frame, 200, 50, 100, 100, "next"))
-		{
-			while (true)
-			{
-				flag_out = 1;
-				imgNum++;
-				sprintf_s(str, "D:\\photo\\%d.bmp", imgNum);
-				string name = str;
-				struct stat buffer;
-				if ((stat(name.c_str(), &buffer) == 0))
-					break;
-				if (imgNum > 1000)
-					exit(0);
-			}
-		}
-		if (cvui::button(frame, 400, 50, 100, 100, "end"))
-		{
-			exit(0);
-		}
-		cvui::update();
-		cv::imshow("button", frame);
-	}
-
-}
-const Vec3b WHITE = Vec3b(255, 255, 255);
-const Vec3b BLACK = Vec3b(0, 0, 0);
-const Vec3b RED = Vec3b(0, 0, 255);
-const Vec3b GREEN = Vec3b(0, 255, 0);
-const Vec3b BLUE = Vec3b(255, 0, 0);
-const Vec3b YELLOW = Vec3b(0, 255, 255);
-const Vec3b CYAN = Vec3b(255, 255, 0);
-const Vec3b DARKYELLOW = Vec3b(0, 128, 128);
-Mat merge(Mat imgBin)
-{
-	Mat imgGray;
-	imgBin.copyTo(imgGray);
-	imgGray = imgGray * 255;
-	Mat imgColor;
-	cvtColor(imgGray, imgColor, COLOR_GRAY2BGR);
-	//imgGray.convertTo(imgColor, CV_GRAY2BGR);
-	for (int i = imgInfo.top; i < _ROW; i++)
-	{
-		imgColor.at<Vec3b>(i, RLB[i]) = RED;
-		imgColor.at<Vec3b>(i, LLB[i]) = RED;
-		imgColor.at<Vec3b>(i, MLB[i]) = GREEN;
-		if (_ROW - i <= imgInfo.len)
-			imgColor.at<Vec3b>(i, imgInfo.len_col) = DARKYELLOW;
 
 	}
-
-	for (int j = 0; j < _COLUMN; j++)
-	{
-		imgColor.at<Vec3b>(imgInfo.bottom, j) = YELLOW;
-		imgColor.at<Vec3b>(imgInfo.top, j) = YELLOW;
-	}
-	if (imgInfo.Lcliffs.downExist)
-		for (int i = -2; i <= 2; i++)
-		{
-			imgColor.at<Vec3b>(imgInfo.Lcliffs.downy, imgInfo.Lcliffs.downx + i) = CYAN;
-			imgColor.at<Vec3b>(imgInfo.Lcliffs.downy + i, imgInfo.Lcliffs.downx) = CYAN;
-		}
-	if (imgInfo.Lcliffs.topExist)
-		for (int i = -2; i <= 2; i++)
-		{
-			imgColor.at<Vec3b>(imgInfo.Lcliffs.topy, imgInfo.Lcliffs.topx + i) = RED;
-			imgColor.at<Vec3b>(imgInfo.Lcliffs.topy + i, imgInfo.Lcliffs.topx) = RED;
-		}
-	if (imgInfo.Rcliffs.downExist)
-		for (int i = -2; i <= 2; i++)
-		{
-			imgColor.at<Vec3b>(imgInfo.Rcliffs.downy, imgInfo.Rcliffs.downx + i) = CYAN;
-			imgColor.at<Vec3b>(imgInfo.Rcliffs.downy + i, imgInfo.Rcliffs.downx) = CYAN;
-		}
-	if (imgInfo.Rcliffs.topExist)
-		for (int i = -2; i <= 2; i++)
-		{
-			imgColor.at<Vec3b>(imgInfo.Rcliffs.topy, imgInfo.Rcliffs.topx + i) = CYAN;
-			imgColor.at<Vec3b>(imgInfo.Rcliffs.topy + i, imgInfo.Rcliffs.topx) = CYAN;
-		}
-	//if (imgInfo.car_exist&&carCtrl.flag_associate==2)
-	//{
-	//	for (int i = imgInfo.car_bottom; i > imgInfo.car_top; i--)
-	//	{
-	//		imgColor.at<Vec3b>(i, RLC[i]) = BLUE;
-	//		imgColor.at<Vec3b>(i, LLC[i]) = BLUE;
-	//		imgColor.at<Vec3b>(i, MLC[i]) = WHITE;
-	//	}
-	//	for (int j = 0; j < _COLUMN; j++)
-	//	{
-	//		imgColor.at<Vec3b>(imgInfo.car_bottom, j) = RED;
-	//		imgColor.at<Vec3b>(imgInfo.car_top, j) = RED;
-	//	}
-	//}
-	return imgColor;
-}
-Mat array2mat(uint8* arr, uint8 h, uint8 w)
-{
-	return Mat(h, w, CV_8UC1, (uint8*)arr);
-}
-void mat2array(Mat img)
-{
-	int h = img.size().height;
-	int w = img.size().width;
-	for (int i = 0; i < h; i++)
-	{
-		for (int j = 0; j < w; j++)
-		{
-			mt9v30x_image[i][j] = img.at<uint8>(i, j);
-		}
-	}
-}
-void matShow(Mat img, enum type imgType, string str)
-{
-	int h = img.size().height;
-	int w = img.size().width;
-	namedWindow(str);
-	Size dsize = Size(w * 3, h * 6);
-	Mat bigImg = Mat(dsize, img.type());
-	cv::resize(img, bigImg, dsize, 0, 0, 0);
-	switch (imgType)
-	{
-	case color:
-		break;
-	case gray:
-
-		break;
-	case bin:
-		bigImg = bigImg * 255;
-		break;
-	default:
-		break;
-	}
-	imshow(str, bigImg);
-}
-int  myabs(int dat)
-{
-	if (dat >= 0)  return dat;
-	else        return -dat;
 }

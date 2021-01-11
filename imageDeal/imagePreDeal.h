@@ -12,12 +12,14 @@
 #include"mainInclude.h"
 #include<algorithm>
 using namespace std;
-uint8 otsu2(uint8 down, uint8 top);
-uint8 _otsuThreshold(void);
+extern uint8 threshold_image;
+extern uint8 mt9v30x_image[120][188];
+enum binaryMethod{OTSU,OTSU2D,SAUVOLA,SOBEL,BALANCE,MEDIANFILTER};
+uint8 otsuTh(void);
 void sauvola();
-void imageBinary(void);
+void process(binaryMethod method);
 void medianFilter(void);
-int cvOtsu2D(void);
+int otsu2dTh(void);
 void imageSample(void);
 void sobel(void);
 #endif /* CODE_IMAGEPREDEAL_H_ */

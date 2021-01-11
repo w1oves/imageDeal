@@ -9,41 +9,13 @@
  */
 #include "imagePreDeal.h"
 uint8 SampleRow[ROW] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 32, 34, 36, 38, 40, 42, 44, 46, 48, 50, 52, 54, 56, 58, 60, 62, 64, 66, 68, 70, 72, 74, 76, 78, 80, 82, 84, 86, 88 };
-#if 0
-// uint8 real_pre_width[MT9V03X_H] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
-// 								   3, 5, 7, 9, 11, 13, 15, 17, 19, 21,
-// 								   23, 25, 27, 29, 31, 33, 35, 37, 39, 40,
-// 								   42, 44, 46, 48, 51, 53, 55, 57, 59, 61,
-// 								   63, 65, 67, 69, 71, 74, 76, 78, 80, 82,
-// 								   84, 86, 88, 90, 92, 94, 96, 98, 100, 102,
-// 								   104, 106, 108, 111, 113, 115, 117, 119, 122, 124,
-// 								   126, 128, 130, 132, 134, 136, 138, 140, 142, 144,
-// 								   146, 149, 151, 153, 155, 157, 159, 161, 163, 165,
-// 								   167, 169, 171, 172, 173, 174, 175, 176, 177, 178,
-// 								   179, 179, 180, 180, 188, 188, 188, 188, 188, 188,
-// 								   188, 188, 188, 188, 188, 188, 188, 188, 188, 188};
-
-// uint8 SampleRow[ROW] = {
-// 	7, 9, 11, 13, 15, 17, 19, 21, 23, 25,
-// 	27, 29, 31, 33, 35, 37, 40, 42, 44, 46,
-// 	48, 50, 52, 54, 56, 58, 60, 62, 64, 66,
-// 	68, 70, 72, 74, 76, 78, 80, 82, 84, 86,
-// 	87, 88, 89, 90, 91, 92, 93, 94, 95, 96,
-// 	97, 98, 99, 100, 103, 106, 109, 112, 115, 118};
-
-// uint8 SampleRow[ROW] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9,
-// 						10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
-// 						20, 22, 24, 26, 28, 30, 32, 34, 36, 38,
-// 						40, 42, 44, 46, 48, 50, 52, 54, 56, 58,
-// 						60, 63, 66, 69, 72, 75, 78, 81, 84, 87,
-// 						90, 93, 96, 99, 102, 105, 108, 111, 114, 118};
-#endif
+uint8 mt9v30x_image[120][188];
 uint8 imageGray[ROW][COLUMN];
 uint8 imageBin[ROW][COLUMN];
 #define GrayScale 256
 #define pixelSum (COLUMN * ROW)
 
-uint8 threshold;
+uint8 threshold_image;
 /**
  * @name: imageBinary
  * @details: 灰度图像二值化函数：中值滤波->大津法求阈值->二值化
@@ -53,43 +25,80 @@ uint8 threshold;
 #include<chrono>
 #include<iostream>
 
-void imageBinary(void)
+void process(binaryMethod method)
 {
 	//中值滤波
-
-	//大津法求阈值
-#if 0
-	
-	threshold = _otsuThreshold();
-	auto mid = std::chrono::steady_clock::now();
-	for (int i = 0; i < ROW; i++)
+	auto start = std::chrono::steady_clock::now();
+	switch (method)
 	{
-		for (int j = 0; j < COLUMN; j++)
-		{
-			imageBin[i][j] = imageGray[i][j] > threshold;
-		}
+	case OTSU:
+		threshold_image = otsuTh();
+		for (int i = 0; i < ROW * COLUMN; i++)
+			*(imageBin[0] + i) = *(imageGray[0] + i) > threshold_image;
+		break;
+	case OTSU2D:
+		break;
+	case SAUVOLA:
+		threshold_image = otsuTh();
+		for (int i = 0; i < ROW * COLUMN; i++)
+			*(imageBin[0] + i) = *(imageGray[0] + i) > threshold_image;
+		sauvola();
+		break;
+	case SOBEL:
+		sobel();
+		break;
+	case BALANCE:
+		break;
+	case MEDIANFILTER:
+		medianFilter();
+		break;
+	default:
+		break;
 	}
 	auto end = std::chrono::steady_clock::now();
-#else
-	sauvola();
-	medianFilter();
-#endif
-	
-
 }
 void sobel(void)
 {
 	uint8 i, j;
+	int8 x, y;
 	uint8 tmp[ROW][COLUMN];
+	const int8 sobelx[3][3] = {
+		{-1, 0, 1},
+		{-2, 0, 2},
+		{-1, 0, 1}
+	};
+	const int8 sobely[3][3] = {
+		{-1, -2, -1},
+		{0, 0, 0},
+		{1, 2, 1}
+	};
 	memcpy(tmp, imageBin, ROW * COLUMN);
 	for (i = 1; i < ROW - 2; i++)
 	{
 		for (j = 1; j < COLUMN - 2; j++)
 		{
-			imageBin[i][j] = -1 * tmp[i - 1][j - 1] - 2 * tmp[i - 1][j] - 1 * tmp[i - 1][j + 1]
-				+ 1 * tmp[i + 1][j + 1] + 2 * tmp[i + 1][j] + 1 * tmp[i + 1][j + 1];
-			imageBin[i][j] = !imageBin[i][j];
+			int8 sumx=0;
+			for (x=-1;x<2;x++)
+			{
+				for (y = -1; y < 2; y++)
+				{
+					sumx += tmp[i + y][j + x] * sobelx[1+y][1+x];
+				}
+			}
+			int8 sumy = 0;
+			for (x = -1; x < 2; x++)
+			{
+				for (y = -1; y < 2; y++)
+				{
+					sumy += tmp[i + y][j + x] * sobely[1 + y][1 + x];
+				}
+			}
+			imageBin[i][j] = !(sumx|sumy);
+			//imageBin[i][j] = -1 * tmp[i - 1][j - 1] - 2 * tmp[i - 1][j] - 1 * tmp[i - 1][j + 1]
+			//	+ 1 * tmp[i + 1][j + 1] + 2 * tmp[i + 1][j] + 1 * tmp[i + 1][j + 1];
+			//imageBin[i][j] = !imageBin[i][j];
 		}
+		
 	}
 }
 //************************************
@@ -100,8 +109,8 @@ void sobel(void)
 //           const int windowSize                   [in]        处理区域宽高
 // 返 回 值: void
 //************************************'
-#define whalf 10
-#define k_sauvola 0.11
+#define whalf 7
+#define k_sauvola 0.18
 #define len_IntImg (2*whalf+2)
 uint16 backIntegralImg[len_IntImg][COLUMN];
 uint32 backIintegralImgSqrt[len_IntImg][COLUMN];
@@ -179,6 +188,8 @@ void sauvola(void)
 
 		for (j = 0; j < COLUMN; j++)
 		{
+			if (!binPtr[i * COLUMN + j] || i > ROW - 10 || myabs(j - COLUMN / 2) < 10)
+				continue;
 			xmin = (j > whalf) ? j - whalf : 0;
 			xmax = (j < COLUMN - whalf - 1) ? j + whalf : COLUMN - 1;
 			area = (xmax - xmin + 1) * (ymax - ymin + 1);
@@ -221,14 +232,11 @@ void sauvola(void)
 			std = ((double)sqdiff - (double)diff * (double)diff / (double)area) / (double)(area - 1);
 			a = ((double)((double)grayPtr[i * COLUMN + j] * (double)area / (double)diff) - 1 + k_sauvola);
 			b = (k_sauvola * k_sauvola / 128 / 128) * std;
-			if (a < 0 || a * a < b)
-				binPtr[i * COLUMN + j] = 0;
-			else
-				binPtr[i * COLUMN + j] = 1;
+			binPtr[i * COLUMN + j] = !(a < 0 || a * a < b);
 #endif
-			}
 		}
 	}
+}
 
 void imageSample(void)
 {
@@ -248,22 +256,26 @@ void imageSample(void)
  * @name: medianFilter
  * @details: 综合上、左、右、当前坐标共四个点求中值滤波,效果比较好,速度未测算
  * @param {灰度数组（全局变量）}
- * @return: 滤波后的灰度数组（全局变量）
+ * @return: 滤波后的黑白数组（全局变量）
  */
 void medianFilter(void)
 {
 	for (int i = ROW - 2; i > 1; i--)
 		for (int j = 1; j < COLUMN - 1; j++)
 		{
-			if (imageBin[i + 1][j] && imageBin[i][j - 1] && imageBin[i][j + 1])
-				imageBin[i][j] = 1;
-			if (!imageBin[i + 1][j] && !imageBin[i][j - 1] && !imageBin[i][j + 1])
-				imageBin[i][j] = 0;
+			if (!imageBin[i][j])
+			{
+				if (imageBin[i][j - 1] && imageBin[i][j + 1])
+					imageBin[i][j] = 1;
+				//if (imageBin[i-1][j] && imageBin[i+1][j])
+				//	imageBin[i][j] = 1;
+			}
+
 		}
 }
 
 
-int cvOtsu2D(void)
+int otsu2dTh(void)
 {
 	double dHistogram[256][256];        //建立二维灰度直方图  
 	double dTrMatrix = 0.0;             //离散矩阵的迹
@@ -351,72 +363,7 @@ int cvOtsu2D(void)
 	nThreshold = (nThreshold_t + nThreshold_s) / 2;//返回阈值，有多种形式，可以单独某一个，也可                                                         //是两者的均值 
 	return nThreshold;
 }
-/***************大津法求阈值函数*******************/
-/**
- * @name: otsuThreshold
- * @details: 大津法求二值化阈值（最大类间方差法）；速度较快
- * @param {灰度数组（全局变量）}
- * @return: 二值化阈值
- */
-int avg;
-uint8 otsu2(uint8 down, uint8 top)
-{
-	uint16 pixelSum_part = (down - top) * COLUMN;
-	uint16 histogram[GrayScale] = { 0 };
-	uint32 iMulHistogram[GrayScale] = { 0 };
-	uint8 i;
-	uint8 threshold = 0;
-	uint32 sum = 0;
-	//统计灰度级中每个像素在整幅图像中的个数
-	unsigned char* ptr = &imageGray[top][0];
-	for (uint16 i = 0; i < (down - top) * COLUMN; i++)
-		histogram[ptr[i]]++; //将像素值作为计数数组的下标
-	//获取总的像素值
-	for (i = 0; i < GrayScale - 1; i++)
-	{
-		iMulHistogram[i] = i * histogram[i];
-		sum += iMulHistogram[i];
-	}
-	avg = sum / (ROW * COLUMN);
-	uint8 MinValue, MaxValue;
-	for (MinValue = 0; MinValue < GrayScale - 1 && histogram[MinValue] == 0; MinValue++)
-		; //获取最小灰度的值
-	for (MaxValue = GrayScale - 1; MaxValue > MinValue && histogram[MaxValue] == 0; MaxValue--)
-		; //获取最大灰度的值
-	//遍历灰度级[0,255]
-	if (MaxValue == MinValue)
-		return (uint8)MaxValue; // 图像中只有一个颜色
-	if (MinValue + 1 == MaxValue)
-		return (uint8)MinValue; // 图像中只有二个颜色
-	//back：背景像素点；front：前景像素点
-	//w：比例；u：平均值；
-	uint16 w_back = 0, w_front = 0;
-	uint32 u_back_sum = 0, u_front_sum = 0;
-	float u_back = 0, u_front = 0;
-	float deltaTmp = 0, deltaMax = 0;
-	for (i = MinValue; i < MaxValue; i++) // i作为阈值
-	{
-		//更新前景、后景像素点比例
-		w_back += histogram[i];
-		w_front = pixelSum_part - w_back;
-		//更新前景、后景像素总灰度值
-		u_back_sum += iMulHistogram[i];
-		u_front_sum = sum - u_back_sum;
-		//更新前景、后景像素平均灰度值
-		u_back = u_back_sum / (float)w_back;
-		u_front = u_front_sum / (float)w_front;
-		//计算类间方差
-		deltaTmp = w_back * w_front * (u_back - u_front) * (u_back - u_front) / (float)pixelSum_part;
-		//求最大类间方差
-		if (deltaTmp > deltaMax)
-		{
-			deltaMax = deltaTmp;
-			threshold = (uint8)i;
-		}
-	}
-	return threshold;
-}
-uint8 _otsuThreshold(void)
+uint8 otsuTh(void)
 {
 	uint16 histogram[GrayScale] = { 0 };
 	uint32 iMulHistogram[GrayScale] = { 0 };
@@ -461,7 +408,7 @@ uint8 _otsuThreshold(void)
 		u_back = u_back_sum / (float)w_back;
 		u_front = u_front_sum / (float)w_front;
 		//计算类间方差
-		deltaTmp = w_back * w_front * (u_back - u_front) * (u_back - u_front) / (float)pixelSum;
+		deltaTmp = w_back * w_front * (u_back - u_front) * (u_back - u_front);
 		//求最大类间方差
 		if (deltaTmp > deltaMax)
 		{
