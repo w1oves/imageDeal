@@ -10,7 +10,6 @@
 2.用Visual Studio 2019/2017打开  
 3.下载opencv340 C++版本  
 4.在Visual Studio中配置opencv，可以在搜索引擎中搜索 OpenCV3.4+VisualStudio开发环境配置  
-5.下载cvui库https://github.com/Dovyski/cvui 并放到项目文件夹中  
-6.将素材图片（120*188的bmp格式图片)放到文件夹D/photo中并以%d.bmp格式命名（也可以在代码中自定义）  
-7.运行代码  
+5.将素材图片（120*188的bmp格式图片)放到文件夹D/photo中并以%d.bmp格式命名（也可以在代码中自定义）  
+6.运行代码  
 
