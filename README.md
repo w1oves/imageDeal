@@ -13,3 +13,6 @@
 5.将素材图片（120*188的bmp格式图片)放到文件夹D/photo中并以%d.bmp格式命名（也可以在代码中自定义）  
 6.运行代码  
 
+## 视频
+相关演示视频在https://www.bilibili.com/video/BV1Ay4y1m7KC?from=search&seid=5597632271366628433
+
